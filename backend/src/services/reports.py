@@ -1,5 +1,6 @@
 import time, os, csv, io, hashlib, json
 from fastapi import HTTPException
+from sqlalchemy import update
 from src.models import Job, Report, Delivery
 from src.config.settings import ARTIFACT_DIR
 def create(db, data):
@@ -11,7 +12,16 @@ def create(db, data):
     return r
 def deliver(db, report):
     j=db.get(Job,report.job_id)
-    if not j or not j.approved: return
+    if not j or not j.approved or j.status!='completed': return
+    # Duplicate/late deliveries are possible when several workers observe the
+    # same due report. Claim the period with a conditional update on next_run;
+    # only the winner writes the artifact, and a crash rolls the claim back with
+    # the rest of the transaction so the period is retried rather than skipped.
+    due=report.next_run
+    next_run=time.time()+report.interval_seconds
+    claimed=db.execute(update(Report).where(Report.id==report.id,Report.next_run==due,Report.enabled==True).values(next_run=next_run))
+    if claimed.rowcount!=1:return
+    report.next_run=next_run
     out=io.StringIO()
     out.write('\ufeff')
     table=j.result.get('table',{})
@@ -30,5 +40,4 @@ def deliver(db, report):
     os.makedirs(ARTIFACT_DIR,exist_ok=True)
     with open(os.path.join(ARTIFACT_DIR,delivery.filename),'wb') as f:f.write(data)
     with open(os.path.join(ARTIFACT_DIR,delivery.filename+'.json'),'w') as f: json.dump({'job':j.name,'params':j.params,'result':j.result,'checksum':delivery.checksum},f,ensure_ascii=False,allow_nan=False)
-    report.next_run=time.time()+report.interval_seconds
     return delivery

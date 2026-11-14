@@ -34,6 +34,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-pick-paired-development-only}
       SEED_DEMO: ${SEED_DEMO:-true}
       ARTIFACT_DIR: /artifacts
+      JOB_LEASE_SECONDS: ${JOB_LEASE_SECONDS:-20}
+      JOB_LEASE_RENEW_SECONDS: ${JOB_LEASE_RENEW_SECONDS:-5}
     ports: ["${BACKEND_PORT:-19205}:8000"]
     volumes: ["analysis-artifacts:/artifacts"]
     depends_on:
@@ -47,7 +49,8 @@ services:
       start_period: 15s
   worker:
     build: ./backend
-    container_name: ${COMPOSE_PROJECT_NAME:-pick-paired}-worker
+    # No fixed container_name: allows `docker compose up -d --scale worker=3`
+    # so several executors contend for leases safely.
     command: ["python", "-m", "src.worker"]
     environment: *app-env
     volumes: ["analysis-artifacts:/artifacts"]

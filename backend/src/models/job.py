@@ -14,3 +14,10 @@ class Job(Base):
     created_by: Mapped[int] = mapped_column(ForeignKey('users.id'))
     created_at: Mapped[float] = mapped_column(Double)
     finished_at: Mapped[float | None] = mapped_column(Double, nullable=True)
+    # Database lease: only the owner holding the current fence token may write.
+    lease_owner: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    lease_token: Mapped[int] = mapped_column(default=0)
+    lease_expires_at: Mapped[float | None] = mapped_column(Double, nullable=True)
+    claimed_at: Mapped[float | None] = mapped_column(Double, nullable=True)
+    heartbeat_at: Mapped[float | None] = mapped_column(Double, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(default=0)
